@@ -969,6 +969,7 @@ class LTIX {
             $TSUGI_LAUNCH->output = $OUTPUT;
         } else {
             $TSUGI_LAUNCH->output = new \Tsugi\UI\Output();
+            $OUTPUT = new \stdClass();
         }
         $OUTPUT->launch = $TSUGI_LAUNCH;
 
