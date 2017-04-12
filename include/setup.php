@@ -200,13 +200,16 @@ if (!function_exists('http_response_code'))
     }
 }
 
-// Convience method, pattern borrowed from WordPress
-function __($message, $textdomain=false) {
-    if ( ! function_exists('gettext')) return $message;
-    if ( $textdomain === false ) {
-        return gettext($message);
-    } else {
-        return dgettext($textdomain, $message);
+if (!function_exists('__')) {
+    // Convience method, pattern borrowed from WordPress
+    function __($message, $textdomain = false)
+    {
+        if (!function_exists('gettext')) return $message;
+        if ($textdomain === false) {
+            return gettext($message);
+        } else {
+            return dgettext($textdomain, $message);
+        }
     }
 }
 
