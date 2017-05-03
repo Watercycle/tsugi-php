@@ -51,6 +51,7 @@ class Application extends \Silex\Application {
             echo("Please see config-dist.php for sample code.\n</pre>\n");
             die('Need to set $CFG->loader');
         }
+        $launch->cfg = $CFG;
         $this['tsugi'] = $launch;
         $launch->output->buffer = true;  // Buffer output
 
@@ -58,7 +59,12 @@ class Application extends \Silex\Application {
         $session->start();
         $this['session'] = $session;
 
-        $loader = new \Twig_Loader_Filesystem('templates');
+        if ( file_exists('templates') ) {
+            $loader = new \Twig_Loader_Filesystem('templates');
+        } else {
+            $loader = new \Twig_Loader_Filesystem('.');
+        }
+        
         $yourNewPath = $CFG->dirroot . '/vendor/tsugi/lib/src/Templates';
         $loader->addPath($yourNewPath, 'Tsugi');
         $yourNewPath = $CFG->dirroot . '/vendor/koseu/lib/src/Templates';
@@ -81,7 +87,7 @@ class Application extends \Silex\Application {
     }
 
     /**
-     * tsugiRedirect - Send the browser to a new loation with session
+     * tsugiReroute - Send the browser to a new location with session
      *
      * Usage:
      *     $app->get('/', 'AppBundle\\Attend::get')->bind('main');
@@ -89,14 +95,15 @@ class Application extends \Silex\Application {
      *
      * Then at the end of the POST code, do this:
      *
-     *     return $app->tsugiRedirect('main');
+     *     return $app->tsugiReroute('main');
      *
      */
 
-    function tsugiRedirect($route) 
+    function tsugiReroute($route) 
     {
         return $this->redirect( addSession($this['url_generator']->generate($route)) );
     }
+    function tsugiRedirect($route) { return $this->tsugiReroute($route); } // Deprecated
 
     /**
      * tsugiFlashSuccess - Add a success message to the old and new flash session.
