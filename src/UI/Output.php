@@ -207,6 +207,19 @@ if (window!=window.top) {
         echo($ob_output);
     }
 
+    /**
+     * templateInclude - Include a handlebars template, dealing with i18n
+     *
+     * This is a normal handlebars template except we can ask for a translation
+     * of text as follows:
+     *
+     *    ...
+     *    {{__ 'Hello world' }}
+     *    ...
+     *
+     * The i18n replacement will be handled in the server in the template.  Single
+     * or Double quotes can be used.
+     */
     function templateInclude($name) {
         if ( is_array($name) ) {
             foreach($name as $n) {
@@ -215,7 +228,15 @@ if (window!=window.top) {
             return;
         }
         echo('<script id="template-'.$name.'" type="text/x-handlebars-template">'."\n");
-        require('templates/'.$name.'.hbs');
+        $template = file_get_contents('templates/'.$name.'.hbs');
+        $new = preg_replace_callback(
+            '|{{__ *[\'"]([^\'"]*)[\'"].*?}}|',
+            function ($matches) {
+                return __(htmlent_utf8(trim($matches[1])));
+            },
+            $template
+        );
+        echo($new);
         echo("</script>\n");
     }
 
@@ -226,6 +247,7 @@ if (window!=window.top) {
         echo('<script src="'.$CFG->staticroot.'/bootstrap-3.1.1/js/bootstrap.min.js"></script>'."\n");
         echo('<script src="'.$CFG->staticroot.'/js/jquery-ui-1.11.4/jquery-ui.min.js"></script>'."\n");
         echo('<script src="'.$CFG->staticroot.'/js/handlebars-v4.0.2.js"></script>'."\n");
+        echo('<script src="'.$CFG->staticroot.'/tmpljs-3.8.0/tmpl.min.js"></script>'."\n");
         echo('<script src="'.$CFG->staticroot.'/js/tsugiscripts.js"></script>'."\n");
 
         if ( isset($CFG->sessionlifetime) ) {
@@ -858,6 +880,13 @@ EOF;
     }
 
     public static function jsonError($message,$detail="") {
+        header('HTTP/1.1 400 '.$message);
+        header('Content-Type: application/json; charset=utf-8');
+        echo(json_encode(array("error" => $message, "detail" => $detail)));
+    }
+
+    public static function jsonAuthError($message,$detail="") {
+        header('HTTP/1.1 403 '.$message);
         header('Content-Type: application/json; charset=utf-8');
         echo(json_encode(array("error" => $message, "detail" => $detail)));
     }
