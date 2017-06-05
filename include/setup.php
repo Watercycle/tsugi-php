@@ -5,7 +5,7 @@ if ( ! isset($CFG) ) die_with_error_log("Please configure this product using con
 // upgrade checking - don't change this unless you want to trigger
 // database upgrade messages it should be the max of all versions in
 // all database.php files.
-$CFG->dbversion = 201705270934;
+$CFG->dbversion = 201706030959;
 
 // Just turn this off to avoid security holes due to XML parsing
 if ( function_exists ( 'libxml_disable_entity_loader' ) ) libxml_disable_entity_loader();
@@ -70,6 +70,10 @@ if ( !isset($CFG->casa_originator_id) ) $CFG->casa_originator_id = md5($CFG->pro
 if ( !isset($CFG->apphome) ) $CFG->apphome = $CFG->wwwroot;
 
 if ( !isset($CFG->google_translate) ) $CFG->google_translate = false;
+
+// Certification hacks
+if ( !isset($CFG->require_conformance_parameters) ) $CFG->require_conformance_parameters = true;
+if ( !isset($CFG->prefer_lti1_for_grade_send) ) $CFG->prefer_lti1_for_grade_send = true;
 
 // Set this to the temporary folder if not set - dev only
 if ( ! isset($CFG->dataroot) ) {
@@ -232,9 +236,14 @@ if (function_exists('bindtextdomain')) {
 
 // Set up the user's locale
 if ( function_exists('bindtextdomain') && function_exists('textdomain') && isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ) {
+    $locale = null;
     if ( class_exists('Locale') ) {
-        $locale = Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']);
-    } else { // Crude fallback if it is missing
+        try {
+            // Symfony may implement a stub for this function that throws an exception
+            $locale = Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+        } catch (exception $e) { }
+    } 
+    if ($locale === null) { // Crude fallback if we can't use Locale::acceptFromHttp
         $pieces = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']);
         $locale = $pieces[0];
     }
