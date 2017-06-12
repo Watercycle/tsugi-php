@@ -5,7 +5,7 @@ if ( ! isset($CFG) ) die_with_error_log("Please configure this product using con
 // upgrade checking - don't change this unless you want to trigger
 // database upgrade messages it should be the max of all versions in
 // all database.php files.
-$CFG->dbversion = 201706030959;
+$CFG->dbversion = 201706111750;
 
 // Just turn this off to avoid security holes due to XML parsing
 if ( function_exists ( 'libxml_disable_entity_loader' ) ) libxml_disable_entity_loader();
@@ -235,6 +235,7 @@ if (function_exists('bindtextdomain')) {
 }
 
 // Set up the user's locale
+$TSUGI_LOCALE = null;
 if ( function_exists('bindtextdomain') && function_exists('textdomain') && isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ) {
     $locale = null;
     if ( class_exists('Locale') ) {
@@ -252,6 +253,7 @@ if ( function_exists('bindtextdomain') && function_exists('textdomain') && isset
     $domain = $CFG->getScriptFolder();
     bindtextdomain($domain, $CFG->getScriptPathFull()."/locale");
     textdomain($domain);
+    $TSUGI_LOCALE = $locale;
 }
 
 function isCli() {
