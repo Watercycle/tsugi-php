@@ -649,7 +649,7 @@ class LTIX {
         $PDOX->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
         // Add the fields
-        $sql = "SELECT k.key_id, k.key_key, k.secret, k.new_secret, c.settings_url AS key_settings_url,
+        $sql = "SELECT k.key_id, k.key_key, k.secret, k.new_secret, k.settings_url AS key_settings_url,
             n.nonce,
             c.context_id, c.title AS context_title, context_sha256, c.settings_url AS context_settings_url,
             c.ext_memberships_id AS ext_memberships_id, c.ext_memberships_url AS ext_memberships_url,
@@ -1808,7 +1808,10 @@ class LTIX {
         }
         $return_url .= ( strpos($return_url,'?') > 0 ) ? '&' : '?';
         $return_url .= 'lti_errormsg=' . urlencode($msg);
-        if ( $extra !== false ) $return_url .= '&detail=' . urlencode($extra);
+        if ( $extra !== false ) {
+            $return_url .= '&detail=' . urlencode($extra);
+            header('X-Tsugi-Error-Detail: '.$extra);
+        }
         header("Location: ".$return_url);
         error_log($prefix.' '.$msg.' '.$extra);
         exit();
