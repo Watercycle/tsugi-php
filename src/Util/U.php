@@ -65,6 +65,12 @@ class U {
         return $local;
     }
 
+    /**
+     * Get the last bit of the path
+     *
+     * input: /py4e/lessons/intro?x=2
+     * output: intro
+     */
     public static function get_request_document() {
         $uri = $_SERVER['REQUEST_URI'];     // /tsugi/lti/some/cool/stuff
         $pieces = explode('/',$uri);
@@ -75,6 +81,44 @@ class U {
             return $local_path;
         }
         return false;
+    }
+
+    /**
+     * Get the path to the current request, w/o trailing slash
+     *
+     * input: /py4e/lessons/intro?x=2
+     * output: /py4e/lessons/intro
+     *
+     * input: /py4e/lessons/intro/?x=2
+     * output: /py4e/lessons/intro
+     */
+    public static function get_rest_path($uri=false) {
+        if ( ! $uri ) $uri = $_SERVER['REQUEST_URI'];     // /tsugi/lti/some/cool/stuff
+        $pos = strpos($uri,'?');
+        if ( $pos > 0 ) $uri = substr($uri,0,$pos);
+        if ( self::endsWith($uri, '/') ) {
+            $uri = substr($uri, 0, strlen($uri)-1);
+        }
+        return $uri;
+    }
+
+    /**
+     * Get the path to one above the current request, w/o trailing slash
+     *
+     * input: /py4e/lessons/intro?x=2
+     * output: /py4e/lessons
+     *
+     * input: /py4e/lessons/intro/?x=2
+     * output: /py4e/lessons
+     */
+    public static function get_rest_parent($uri=false) {
+        $uri = self::get_rest_path($uri);
+        $pieces = explode('/', $uri);
+        if ( count($pieces) > 1 ) {
+            array_pop($pieces);
+            $uri = implode('/', $pieces);
+        }
+        return $uri;
     }
 
     public static function addSession($url) {
@@ -92,10 +136,10 @@ class U {
         foreach ( $_GET as $k => $v ) {
             if ( $k == session_name() ) continue;
             if ( is_array($newparms) && array_key_exists($k, $newparms) ) continue;
-            $baseurl = add_url_parm($baseurl, $k, $v);
+            $baseurl = self::add_url_parm($baseurl, $k, $v);
         }
         if ( is_array($newparms) ) foreach ( $newparms as $k => $v ) {
-            $baseurl = add_url_parm($baseurl, $k, $v);
+            $baseurl = self::add_url_parm($baseurl, $k, $v);
         }
 
         return $baseurl;
@@ -105,6 +149,44 @@ class U {
         $url .= strpos($url,'?') === false ? '?' : '&';
         $url .= urlencode($key) . '=' . urlencode($val);
         return $url;
+    }
+
+    public static function absolute_url_ref(&$url) {
+        $url = self::absolute_url($url);
+    }
+
+    public static function absolute_url($url) {
+        global $CFG;
+        if ( strpos($url,'http://') === 0 ) return $url;
+        if ( strpos($url,'https://') === 0 ) return $url;
+        $retval = $CFG->apphome;
+        if ( strpos($url,'/') !== 0 ) $retval .= '/';
+        $retval .= $url;
+        return $retval;
+    }
+
+    /**
+     * Remove any relative elements from a path
+     *
+     * Before   After
+     * a/b/c    a/b/c
+     * a/b/c/   a/b/c/
+     * a/./c/   a/c/
+     * a/../c/  c/
+     */
+    public static function remove_relative_path($path) {
+        $pieces = explode('/', $path);
+        $new_pieces = array();
+        for($i=0; $i < count($pieces); $i++) {
+            if ($pieces[$i] == '.' ) continue;
+            if ($pieces[$i] == '..' ) {
+                array_pop($new_pieces);
+                continue;
+            }
+            $new_pieces[] = $pieces[$i];
+        }
+        $retval = implode("/",$new_pieces);
+        return $retval;
     }
 
     // Request headers for earlier version of PHP and nginx
@@ -132,7 +214,7 @@ class U {
             header('X-PHP-Response-Code: '.$newcode, true, $newcode);
             if(!headers_sent())
                 $code = $newcode;
-        }       
+        }
         return $code;
     }
 
@@ -227,7 +309,6 @@ class U {
      *
      * Borrowed from from_request on OAuthRequest.php
      */
-    
     public static function curPHPUrl() {
         $scheme = (!isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on")
               ? 'http'
@@ -242,6 +323,105 @@ class U {
                               $port .
                               $_SERVER['REQUEST_URI'];
         return $http_url;
+    }
+
+    /** Tightly serialize an integer-only PHP array
+     *
+     *     $arar = Array ( 1 => 42 ,2 => 43, 3 => 44 );
+     *     $str = U::array_Integer_Serialize($arar);
+     *     echo($str); // 1=42,2=43,3=44
+     *
+     * https://stackoverflow.com/questions/30231476/i-want-to-array-key-and-array-value-comma-separated-string
+     */
+    public static function array_Integer_Serialize($arar) {
+        $result = implode(',',array_map('\Tsugi\Util\U::array_Integer_Serialize_Map',array_keys($arar),$arar));
+        return $result;
+    }
+
+    public static function array_Integer_Serialize_Map($a,$b){
+        // We are not messing around :)
+        if ( ! is_int($a) || ! is_int($b) ) {
+            throw new \Exception('array_Integer_Serialize requires integers '.$a.':'.$b);
+        }
+        return $a.'='.$b;
+    }
+
+    /** 
+     * Deserialize an tightly serialized integer-only PHP array
+     *
+     *     $str = '1=42,2=43,3=44';
+     *     $arar = U::array_Integer_Deserialize($str);
+     *     print_r($arar); // Array ( '1' => 42 ,'2' => 43, '3' => 44 );
+     *
+     * https://stackoverflow.com/questions/4923951/php-split-string-in-key-value-pairs
+     */
+    public static function array_Integer_Deserialize($input) {
+        $r = array();
+        preg_match_all("/([^,= ]+)=([^,= ]+)/", $input, $r);
+        $result = array();
+        for($i=0; $i<count($r[1]);$i++) {
+            $k = $r[1][$i];
+            $v = $r[2][$i];
+            if ( !is_numeric($k) || !is_numeric($v) ) {
+                throw new \Exception('array_Integer_Deserialize requires integers '.$k.'='.$v.' ('.$i.')');
+            }
+            $k = $k + 0;
+            $v = $v + 0;
+            if ( ! is_int($k) || ! is_int($v) ) {
+                throw new \Exception('array_Integer_Deserialize requires integers '.$k.'='.$v.' ('.$i.')');
+            }
+            $result[$k] = $v;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Pull off the first element of a key/value array
+     *
+     *     $arr = array('x'=>'ball','y'=>'hat','z'=>'apple');
+     *     print_r($arr);
+     *     print_r(array_kshift($arr)); // [x] => ball
+     *     print_r($arr);
+     *
+     * http://php.net/manual/en/function.array-shift.php#84179
+     */
+    public static function array_kshift(&$arr) {
+        list($k) = array_keys($arr);
+        $r  = array($k=>$arr[$k]);
+        unset($arr[$k]);
+        return $r;
+    }
+
+    public static function setLocale($locale=null)
+    {
+        global $TSUGI_LOCALE, $CFG;
+
+        // No internationalization support
+        if ( ! function_exists('bindtextdomain') ) return;
+        if ( ! function_exists('textdomain') ) return;
+
+        if ( $locale === null && isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ) {
+
+            if ( class_exists('\Locale') ) {
+                try {
+                    // Symfony may implement a stub for this function that throws an exception
+                    $locale = \Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+                } catch (exception $e) { }
+            }
+            if ($locale === null) { // Crude fallback if we can't use Locale::acceptFromHttp
+                $pieces = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']);
+                $locale = $pieces[0];
+            }
+        }
+
+        if ( $locale === null ) return;
+
+        $locale = str_replace('-','_',$locale);
+        putenv('LC_ALL='.$locale);
+        setlocale(LC_ALL, $locale);
+        // error_log("locale=$locale");
+        $TSUGI_LOCALE = $locale;
     }
 
 }

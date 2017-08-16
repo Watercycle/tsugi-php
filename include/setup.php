@@ -1,11 +1,13 @@
 <?php
+use \Tsugi\Util\U;
+
 if ( ! isset($CFG) ) die_with_error_log("Please configure this product using config.php");
 
 // This is where we change the overall database version to trigger
 // upgrade checking - don't change this unless you want to trigger
 // database upgrade messages it should be the max of all versions in
 // all database.php files.
-$CFG->dbversion = 201706111750;
+$CFG->dbversion = 201708132345;
 
 // Just turn this off to avoid security holes due to XML parsing
 if ( function_exists ( 'libxml_disable_entity_loader' ) ) libxml_disable_entity_loader();
@@ -44,6 +46,10 @@ if ( isset($CFG->upgrading) && $CFG->upgrading === true ) require_once("upgradin
 if ( ! isset($CFG->vendorroot) ) $CFG->vendorroot = $CFG->wwwroot."/vendor/tsugi/lib/util";
 if ( ! isset($CFG->vendorinclude) ) $CFG->vendorinclude = $CFG->dirroot."/vendor/tsugi/lib/include";
 if ( ! isset($CFG->vendorstatic) ) $CFG->vendorstatic = $CFG->dirroot."/vendor/tsugi/lib/static";
+if ( ! isset($CFG->launchactivity) ) $CFG->launchactivity = false;
+if ( ! isset($CFG->certification) ) $CFG->certification = false;
+
+if ( isset($CFG->staticroot) ) $CFG->staticroot = \Tsugi\Util\U::remove_relative_path($CFG->staticroot);
 
 require_once $CFG->vendorinclude . "/lms_lib.php";
 
@@ -72,7 +78,7 @@ if ( !isset($CFG->apphome) ) $CFG->apphome = $CFG->wwwroot;
 if ( !isset($CFG->google_translate) ) $CFG->google_translate = false;
 
 // Certification hacks
-if ( !isset($CFG->require_conformance_parameters) ) $CFG->require_conformance_parameters = true;
+if ( !isset($CFG->require_conformance_parameters) ) $CFG->require_conformance_parameters = false;
 if ( !isset($CFG->prefer_lti1_for_grade_send) ) $CFG->prefer_lti1_for_grade_send = true;
 
 // Set this to the temporary folder if not set - dev only
@@ -230,31 +236,19 @@ function _me($message, $textdomain=false) {
     echo(_m($message, $textdomain));
 }
 
+$domain = $CFG->getScriptFolder();
+$folder = $CFG->getScriptPathFull()."/locale";
 if (function_exists('bindtextdomain')) {
     bindtextdomain("master", $CFG->dirroot."/locale");
+    bindtextdomain($domain, $folder);
+}
+if (function_exists('textdomain')) {
+    textdomain($domain);
 }
 
-// Set up the user's locale
+// Set up the user's locale - May be overridden later
 $TSUGI_LOCALE = null;
-if ( function_exists('bindtextdomain') && function_exists('textdomain') && isset($_SERVER['HTTP_ACCEPT_LANGUAGE']) ) {
-    $locale = null;
-    if ( class_exists('Locale') ) {
-        try {
-            // Symfony may implement a stub for this function that throws an exception
-            $locale = Locale::acceptFromHttp($_SERVER['HTTP_ACCEPT_LANGUAGE']);
-        } catch (exception $e) { }
-    } 
-    if ($locale === null) { // Crude fallback if we can't use Locale::acceptFromHttp
-        $pieces = explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']);
-        $locale = $pieces[0];
-    }
-    putenv('LC_ALL='.$locale);
-    setlocale(LC_ALL, $locale);
-    $domain = $CFG->getScriptFolder();
-    bindtextdomain($domain, $CFG->getScriptPathFull()."/locale");
-    textdomain($domain);
-    $TSUGI_LOCALE = $locale;
-}
+U::setLocale();  
 
 function isCli() {
      if(php_sapi_name() == 'cli' && empty($_SERVER['REMOTE_ADDR'])) {
