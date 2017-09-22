@@ -2,6 +2,7 @@
 
 namespace Tsugi\UI;
 
+use Tsugi\Util\U;
 use Tsugi\Core\LTIX;
 use \Tsugi\Crypt\SecureCookie;
 
@@ -102,20 +103,29 @@ class Output extends \Tsugi\Core\SessionAccess {
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" >
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title><?= $CFG->servicename ?><?php if ( isset($CFG->context_title) ) echo(' - '.$CFG->context_title); ?></title>
+        <script>
+        var _TSUGI = {
+            spinnerUrl: "<?= self::getSpinnerUrl() ?>",
+            staticroot: "<?= $CFG->staticroot ?>",
+            window_close_message: "<?= _m('Application complete') ?>",
+            session_expire_message: "<?= _m('Your session has expired') ?>"
+        }
+        </script>
+        <!-- Tiny bit of JS -->
+        <script src="<?= $CFG->staticroot ?>/js/tsugiscripts_head.js"></script>
         <!-- Le styles -->
         <link href="<?= $CFG->staticroot ?>/bootstrap-3.1.1/css/<?php
             if ( isset($CFG->bootswatch) ) echo('bootswatch/'.$CFG->bootswatch.'/'); ?>bootstrap.min.css" rel="stylesheet">
+        <?php
+        if ( !isset($CFG->bootswatch) ) {
+            echo('<link href="'.$CFG->staticroot.'/bootstrap-3.1.1/css/ctheme/ctheme.css" rel="stylesheet">'."\n");
+            echo('<link href="https://fonts.googleapis.com/css?family=Martel:300,700|Open+Sans:300,400,600,700" rel="stylesheet">'."\n");
+        }
+        ?>
 
         <link href="<?= $CFG->staticroot ?>/js/jquery-ui-1.11.4/jquery-ui.min.css" rel="stylesheet">
         <link href="<?= $CFG->staticroot ?>/font-awesome-4.4.0/css/font-awesome.min.css" rel="stylesheet">
         <link href="<?= $CFG->staticroot ?>/css/tsugi.css" rel="stylesheet">
-        <script>
-        var _TSUGI = {
-            spinnerUrl: "<?= self::getSpinnerUrl() ?>",
-            staticroot: "<?= $CFG->staticroot ?>"
-        }
-        </script>
-        <script src="<?= $CFG->staticroot ?>/js/tsugiscripts_head.js"></script>
 
     <style>
     body {
@@ -265,13 +275,13 @@ if (window!=window.top) {
     <?php
         }
 
-        if ( $CFG->google_translate ) {
+        if ( U::allow_track() && $CFG->google_translate ) {
     ?>
 <div id="google_translate_element" style="position: fixed; right: 1em; bottom: 0.25em;"></div><script type="text/javascript">
 function googleTranslateElementInit() {
   new google.translate.TranslateElement({pageLanguage: "en", layout: google.translate.TranslateElement.InlineLayout.SIMPLE
 <?php
-    if ( $CFG->universal_analytics ) {
+    if ( U::allow_track() && $CFG->universal_analytics ) {
         echo(', gaTrack: true, gaId: "'.$CFG->universal_analytics.'"'."\n");
     }
 ?>
@@ -284,7 +294,7 @@ function googleTranslateElementInit() {
 
         if ( $this->session_get('APP_FOOTER') ) echo($this->session_get('APP_FOOTER'));
 
-        $this->doAnalytics();
+        if ( U::allow_track() ) $this->doAnalytics();
 
         // TODO: Remove this when PHP 7 is fixed..  Sigh.
         if ( PHP_VERSION_ID > 70000 ) {
@@ -377,7 +387,7 @@ $('a').each(function (x) {
         $retval['lti'] = LTIX::wrapped_session_get($session_object, 'lti');
         // $retval['lti'] = false;
         $retval['sessionlifetime'] = $CFG->sessionlifetime;
-        echo(json_encode($retval));
+        return $retval;
     }
 
     function footerEnd() {
@@ -469,7 +479,7 @@ $('a').each(function (x) {
         if ( $text == "Cancel" || $text == _m("Cancel") ) $button = "btn-warning";
 
         if ( $url == "_close" ) {
-            echo("<a href=\"#\" onclick=\"window.close();\" class=\"btn ".$button."\">".$text."</a>\n");
+            echo("<a href=\"#\" onclick=\"window_close();\" class=\"btn ".$button."\">".$text."</a>\n");
         } else {
             echo("<a href==\"$url\"  class=\"btn ".$button."\">".$text."</button>\n");
         }
@@ -482,7 +492,7 @@ $('a').each(function (x) {
         if ( $text === false ) $text = _m("Exit");
         $button = "btn-success";
         if ( $text == "Cancel" || $text == _m("Cancel") ) $button = "btn-warning";
-        echo("<a href=\"#\" onclick=\"window.close();\" class=\"btn ".$button."\">".$text."</a>\n");
+        echo("<a href=\"#\" onclick=\"window_close();\" class=\"btn ".$button."\">".$text."</a>\n");
     }
 
     function togglePre($title, $html) {
@@ -523,7 +533,7 @@ $('a').each(function (x) {
         global $CFG;
         $R = $CFG->wwwroot . '/';
         $set = new \Tsugi\UI\MenuSet();
-        $set->setHome('Done', 'javascript:window.close();');
+        $set->setHome('Done', 'javascript:window_close();');
         return $set;
     }
 
@@ -826,18 +836,20 @@ EOF;
     /**
      * Return the text for a full-screen loader
      *
-     *     echo($OUTPUT->getScreenOverlay());
+     *     echo($OUTPUT->getScreenOverlay(false));
      *         ...
      *     <script>
      *     showOverlay();
      *     setTimeout(function() { hideOverlay();} , 5000);
      *     </script>
      */
-    function getScreenOverlay() {
+    function getScreenOverlay($show=true) {
         global $CFG;
         return
-            '<div class="tsugi_overlay" id="tsugi_overlay" style="display:none">' . "\n" .
-            '<img src="'.$CFG->staticroot.'/img/logos/apereo-logo-blue-spin.svg" id="tsugi_overlay_spinner" width="100px" height="100px">' . "\n" .
+            '<div class="tsugi_overlay" id="tsugi_overlay" style="position: fixed, display:'.
+            ($show ? 'block' : 'none'). '">' . "\n" .
+            '<i style="color: blue;" class="fa fa-spinner fa-spin fa-5x fa-fw"></i>' . "\n" .
+            // '<img src="'.$CFG->staticroot.'/img/logos/apereo-logo-blue-spin.svg" id="tsugi_overlay_spinner" width="100px" height="100px">' . "\n" .
             '</div>' . "\n" ;
     }
 
@@ -874,12 +886,8 @@ EOF;
     /**
      * Gets an absolute static path to the specified file
      */
-    public static function getLocalStatic($file) {
-        global $CFG;
-        $path = $CFG->getPwd($file);
-        // For now just use wwwroot to be safe
-        // return $CFG->staticroot . "/" . $path;
-        return $CFG->wwwroot . "/" . $path;
+    public static function getLocalStatic() {
+        return U::get_rest_parent();
     }
 
     // http://stackoverflow.com/questions/49547/making-sure-a-web-page-is-not-cached-across-all-browsers

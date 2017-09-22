@@ -60,6 +60,25 @@ class Net {
         return $LastBODYContent;
     }
 
+    public static function getLastBODYDebug() {
+        global $LastBODYContent;
+        global $LastBODYImpl;
+        global $LastBODYMethod;
+        global $LastBODYURL;
+        global $LastHeadersReceived;
+        global $LastHeadersSent;
+        global $last_http_response;
+
+        // Caller knows the body_sent
+        $retval = array();
+        $retval['code'] = $last_http_response;
+        $retval['body_impl'] = $LastBODYImpl;
+        $retval['headers_sent'] = $LastHeadersSent;
+        $retval['headers_received'] = $LastHeadersReceived;
+        return $retval;
+    }
+
+
     /**
      * Extract a set of header lines into an array
      *
@@ -121,6 +140,7 @@ class Net {
         return $response;
     }
 
+    // Note - handles port numbers in URL automatically
     public static function getCurl($url, $header=false) {
       if ( ! function_exists('curl_init') ) return false;
       global $last_http_response;
@@ -321,11 +341,15 @@ class Net {
         return $response;
     }
 
+    // Note - handles port numbers in URL automatically
     public static function bodyCurl($url, $method, $body, $header) {
       if ( ! function_exists('curl_init') ) return false;
       global $last_http_response;
       global $LastHeadersSent;
       global $LastHeadersReceived;
+      global $LastBODYImpl;
+      global $LastBODYMethod;
+      global $LastBODYContent;
 
       $ch = curl_init();
       curl_setopt($ch, CURLOPT_URL, $url);
@@ -368,6 +392,9 @@ class Net {
       $body = substr($result, $header_size);
       if ( $body === false ) $body = ''; // Handle empty body
       curl_close($ch);
+      $LastBODYContent = $body;
+      $LastBODYImpl = "CURL";
+      $LastBODYMethod = $method;
       return $body;
     }
 
@@ -376,6 +403,13 @@ class Net {
      */
     public static function send403() {
         header("HTTP/1.1 403 Forbidden");
+    }
+
+    /**
+     * Send a 400 (Malformed request) header
+     */
+    public static function send400($msg='Malformed request') {
+        header("HTTP/1.1 400 ".$msg);
     }
 
     /**

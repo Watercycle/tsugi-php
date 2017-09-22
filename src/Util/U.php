@@ -30,6 +30,16 @@ class U {
         error_log($data);
     }
 
+    /**
+     * Produce a Python-style get() to avoid use of ternary operator
+     */
+    public static function get($arr, $key, $default=null) {
+        if ( !is_array($arr) ) return $default;
+        if ( !isset($key) ) return $default;
+        if ( !isset($arr[$key]) ) return $default;
+        return $arr[$key];
+    }
+
     public static function htmlpre_utf8($string) {
         return str_replace("<","&lt;",$string);
     }
@@ -109,10 +119,17 @@ class U {
      * output: /py4e/lessons
      *
      * input: /py4e/lessons/intro/?x=2
-     * output: /py4e/lessons
+     * output: /py4e/lessons/intro
      */
     public static function get_rest_parent($uri=false) {
-        $uri = self::get_rest_path($uri);
+        if ( ! $uri ) $uri = $_SERVER['REQUEST_URI'];     // /tsugi/lti/some/cool/stuff
+        $pos = strpos($uri,'?');
+        if ( $pos > 0 ) $uri = substr($uri,0,$pos);
+        if ( self::endsWith($uri, '/') ) {
+            $uri = substr($uri, 0, strlen($uri)-1);
+            return $uri;
+        }
+
         $pieces = explode('/', $uri);
         if ( count($pieces) > 1 ) {
             array_pop($pieces);
@@ -422,6 +439,37 @@ class U {
         setlocale(LC_ALL, $locale);
         // error_log("locale=$locale");
         $TSUGI_LOCALE = $locale;
+    }
+
+    /**
+     * Indicate if the user has not requested "Do not Track"
+     *
+     * This is just the  inverted value for the "Do not Track".
+     * Using "allow" sematics makes writing code easier!
+     *
+     *  http://donottrack.us/
+     */
+    // From: http://donottrack.us/application
+    public static function allow_track() {
+        $DoNotTrackHeader = "DNT";
+        $DoNotTrackValue = "1";
+
+        $phpHeader = "HTTP_" . strtoupper(str_replace("-", "_", $DoNotTrackHeader));
+
+        $retval = ! ((array_key_exists($phpHeader, $_SERVER)) and ($_SERVER[$phpHeader] == $DoNotTrackValue));
+        return $retval;
+    }
+
+    // Clean out the array of 'secret' keys
+    public static function safe_var_dump($x) {
+            ob_start();
+            if ( isset($x['secret']) ) $x['secret'] = MD5($x['secret']);
+            if ( is_array($x) ) foreach ( $x as &$v ) {
+                if ( is_array($v) && isset($v['secret']) ) $v['secret'] = MD5($v['secret']);
+            }
+            var_dump($x);
+            $result = ob_get_clean();
+            return $result;
     }
 
 }

@@ -250,6 +250,10 @@ class LTIX {
      * @deprecated Session access should be through the Launch Object
      */
     public static function ltiParameter($varname, $default=false) {
+        global $TSUGI_LAUNCH;
+        if ( isset($TSUGI_LAUNCH) ) {
+            return $TSUGI_LAUNCH->ltiParameter($varname, $default);
+        }
         if ( ! isset($_SESSION) ) return $default;
         if ( ! isset($_SESSION['lti']) ) return $default;
         $lti = $_SESSION['lti'];
@@ -263,6 +267,10 @@ class LTIX {
      * @deprecated Session access should be through the Launch Object
      */
     public static function ltiRawPostArray() {
+        global $TSUGI_LAUNCH;
+        if ( isset($TSUGI_LAUNCH) ) {
+            return $TSUGI_LAUNCH->ltiRawPostArray();
+        }
         if ( ! isset($_SESSION) ) return array();
         if ( ! isset($_SESSION['lti_post']) ) return array();
         return($_SESSION['lti_post']);
@@ -274,6 +282,10 @@ class LTIX {
      * @deprecated Session access should be through the Launch Object
      */
     public static function ltiRawParameter($varname, $default=false) {
+        global $TSUGI_LAUNCH;
+        if ( isset($TSUGI_LAUNCH) ) {
+            return $TSUGI_LAUNCH->ltiRawParameter($varname, $default);
+        }
         if ( ! isset($_SESSION) ) return $default;
         if ( ! isset($_SESSION['lti_post']) ) return $default;
         $lti_post = $_SESSION['lti_post'];
@@ -468,19 +480,13 @@ class LTIX {
                 error_log("Unable to update login_at user_id=".$row['user_id']);
             }
 
-            if ( $CFG->launchactivity && isset($row['link_id']) && $row['link_id'] ) {
+            // Only learner launches are logged
+            if ( $CFG->launchactivity && isset($row['link_id']) && $row['link_id'] && $row['role'] == 0 ) {
                 $link_activity = isset($row['link_activity']) ? $row['link_activity'] : null;
                 $link_count = isset($row['link_count']) ? $row['link_count'] : 0;
 
                 if ( $link_activity == null || $link_count == 0 ) {
-/*
-                    $sql = "INSERT INTO {$CFG->dbprefix}lti_link_activity
-                                (link_id, event, count, updated_at) VALUES
-                                (:link_id, 0, 0, NOW())
-                            ON DUPLICATE KEY
-                            UPDATE {$CFG->dbprefix}lti_link_activity
-                            SET updated_at=NOW()";
-*/
+
                     $sql = "INSERT INTO {$CFG->dbprefix}lti_link_activity
                                 (link_id, event, link_count, updated_at) VALUES
                                 (:link_id, 0, 0, NOW())";
@@ -517,15 +523,7 @@ class LTIX {
 
                 if ( isset($row['user_id']) && $row['user_id'] ) {
                     if ( $link_activity == null || $link_count == 0 ) {
-/*
-                        $sql = "INSERT INTO {$CFG->dbprefix}lti_link_user_activity
-                                (link_id, user_id, event, link_user_count, updated_at) VALUES
-                                (:link_id, :user_id, 0, 0, NOW())
-                            ON DUPLICATE KEY
-                            UPDATE {$CFG->dbprefix}lti_link_activity
-                            SET updated_at=NOW()
-                            WHERE link_id=:link_id AND user_id=:user_id";
-*/
+
                         $sql = "INSERT INTO {$CFG->dbprefix}lti_link_user_activity
                                 (link_id, user_id, event, link_user_count, updated_at) VALUES
                                 (:link_id, :user_id, 0, 0, NOW())";
@@ -556,17 +554,55 @@ class LTIX {
                     if ( ! $stmt->success ) {
                         error_log("Unable to update user activity record link=".$row['user_id']);
                     }
+                }
+            }
 
+            // Now the place the event into the circular buffer
+            if ( $CFG->eventcheck !== false ) {
+                // https://stackoverflow.com/questions/3554296/how-to-store-hashes-in-mysql-databases-without-using-text-fields
+                $event_nonce = $row['nonce'].':'.$row['key_key'];
+                $event_launch = null;
+                $canvasUrl = U::get($request_data,'custom_sub_canvas_caliper_url');
+                if ( $canvasUrl ) {
+                    $event_launch = 'canvas::'.$canvasUrl;
+                }
+
+                $sql = "INSERT INTO {$CFG->dbprefix}lti_event
+                        (event, key_id, context_id, link_id, user_id, nonce, launch, updated_at) VALUES
+                        (0, :key_id, :context_id, :link_id, :user_id, UNHEX(MD5(:nonce)), :launch, NOW())";
+                $stmt = $PDOX->queryReturnError($sql, array(
+                    ':key_id' => U::get($row, 'key_id'),
+                    ':context_id' => U::get($row, 'context_id'),
+                    ':link_id' => U::get($row, 'link_id'),
+                    ':user_id' => U::get($row, 'user_id'),
+                    ':nonce' => $event_nonce,
+                    ':launch' => $event_launch
+                ));
+
+                if ( ! $stmt->success ) {
+                    error_log("Unable to insert event record");
+                }
+                $row['event_nonce'] = $event_nonce;
+                $row['event_launch'] = $event_launch;
+            }
+
+            // Probabilistically cleanup event table
+            if ( $CFG->eventcheck > 0 ) {
+                if ( (time() % $CFG->eventcheck) == 0 ) {
+                    $stmt = $PDOX->queryDie("DELETE FROM {$CFG->dbprefix}lti_event WHERE
+                        created_at < DATE_ADD(CURRENT_TIMESTAMP(), INTERVAL -{$CFG->eventtime} SECOND)");
+                    error_log("Event table cleanup rows=".$stmt->rowCount());
                 }
             }
         }
 
+        // Make sure we debounce really fast relaunches
         self::wrapped_session_put($session_object, 'tsugi_permanent_start_time', time());
-        unset($row['link_activity']);
-        unset($row['link_user_activity']);
+
+        // Encrypt the secret before placing in the session
+        $row['secret'] = self::encrypt_secret($row['secret']);
 
         // Put the information into the row variable and put row into session
-        $row['secret'] = self::encrypt_secret($row['secret']);
         self::wrapped_session_put($session_object, 'lti', $row);
         self::wrapped_session_put($session_object, 'lti_post', $request_data);
 
@@ -727,6 +763,17 @@ class LTIX {
             if ( ! ( strpos($roles,'administrator') === false ) ) $retval['role'] = 5000;
             // Local superuser would be 10000
         }
+
+        // Copy in some extensions.  Backwards compatibility for canvas xapi urls in legacy cartridges
+        $sub_canvas_caliper_url = U::get($FIXED,'sub_canvas_xapi_url');
+        if ( $sub_canvas_caliper_url ) {
+            $sub_canvas_caliper_url = str_replace('xapi','caliper',$sub_canvas_caliper_url);
+        }
+        $sub_canvas_caliper_url = U::get($FIXED,'sub_canvas_caliper_url', $sub_canvas_caliper_url);
+        if ($sub_canvas_caliper_url ) $retval['sub_canvas_caliper_url'] = $sub_canvas_caliper_url;
+
+        $sub_caliper_url = U::get($FIXED,'sub_caliper_url');
+        if ($sub_caliper_url ) $retval['sub_caliper_url'] = $sub_caliper_url;
         return $retval;
     }
 
@@ -1277,6 +1324,7 @@ class LTIX {
         $session_script = self::wrapped_session_get($session_object, 'script_path', null);
         if ( $session_script !== null &&
             (! endsWith(Output::getUtilUrl(''), $CFG->getScriptPath()) ) &&
+            (! startsWith('api', $CFG->getScriptPath()) ) &&
             strpos($CFG->getScriptPath(), $session_script ) !== 0 ) {
             self::send403();
             self::abort_with_error_log('Improper navigation detected', " ".session_id()." script_path ".
@@ -1497,9 +1545,9 @@ class LTIX {
     public static function caliperSend($caliperBody, $content_type='application/json', &$debug_log=false)
     {
 
-        $caliperURL = LTIX::ltiRawParameter('custom_sub_canvas_caliper_url');
+        $caliperURL = LTIX::ltiRawParameter('custom_sub_canvas_xapi_url');
         if ( strlen($caliperURL) == 0 ) {
-            if ( is_array($debug_log) ) $debug_log[] = array('custom_sub_canvas_caliper_url not found in launch data');
+            if ( is_array($debug_log) ) $debug_log[] = array('custom_sub_canvas_xapi_url not found in launch data');
             return false;
         }
 
