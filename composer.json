@@ -23,6 +23,6 @@
     "require": {
         "php": ">=5.5.0",
         "silex/silex": "^2.3",
-        "symfony/translation": "v3.2.7"
+        "symfony/translation": "*"
     }
 }
