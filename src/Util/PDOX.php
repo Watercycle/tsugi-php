@@ -41,6 +41,14 @@ namespace Tsugi\Util;
  */
 class PDOX extends \PDO {
 
+    public function __construct($dsn, $username, $passwd, $options = [])
+    {
+        if (!isset($options[\PDO::MYSQL_ATTR_INIT_COMMAND])) {
+            $options[\PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET sql_mode=""'; // to allow for MySQL 5.7 compatibility
+        }
+        parent::__construct($dsn, $username, $passwd, $options);
+    }
+
     /**
      * Prepare and execute an SQL query with lots of error checking.
      *

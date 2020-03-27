@@ -11,3 +11,5 @@ phpunit.phar
 phpunit-old.phar
 
 composer.phar
+composer.lock
+vendor/
