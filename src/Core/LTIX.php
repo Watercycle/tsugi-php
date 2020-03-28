@@ -56,7 +56,7 @@ class LTIX {
                 $PDOX = new \Tsugi\Util\PDOX($CFG->pdo, $CFG->dbuser, $CFG->dbpass);
                 $PDOX->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
             } catch(\PDOException $ex){
-                error_log("DB connection: "+$ex->getMessage());
+                error_log("DB connection: " . $ex->getMessage());
                 die($ex->getMessage()); // with error_log
             }
         }

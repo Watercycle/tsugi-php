@@ -474,14 +474,14 @@ class LTI {
                     if ( isset($retval['textString'])) $grade = $retval['textString']+0.0;
                 } else if ( isset($retval['imsx_description']) ) {
                     $LastPOXGradeError = $retval['imsx_description'];
-                    error_log("Grade read failure: "+$LastPOXGradeError);
-                    if ( is_array($debug_log) )  $debug_log[] = array("Grade read failure: "+$LastPOXGradeError);
+                    error_log("Grade read failure: " . $LastPOXGradeError);
+                    if ( is_array($debug_log) )  $debug_log[] = array("Grade read failure: " . $LastPOXGradeError);
                     return $LastPOXGradeError;
                 }
             }
         } catch(Exception $e) {
             $LastPOXGradeError = $e->getMessage();
-            error_log("Grade read failure: "+$LastPOXGradeError);
+            error_log("Grade read failure: " . $LastPOXGradeError);
             if ( is_array($debug_log) )  $debug_log[] = array("Exception: ".$status);
             return $LastPOXGradeError;
         }
