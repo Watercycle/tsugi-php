@@ -21,8 +21,6 @@
         ]
     },
     "require": {
-        "php": ">=5.5.0",
-        "silex/silex": "^2.3",
-        "symfony/translation": "*"
+        "php": ">=7.4"
     }
 }
