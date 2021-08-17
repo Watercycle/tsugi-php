@@ -207,7 +207,7 @@ class CC extends \Tsugi\Util\TsugiDOM {
     /**
      * Add a resource to the manifest.
      */
-    public function add_resource_item($module, $title=null, $type, $identifier, $file) {
+    public function add_resource_item($module, $title=null, $type=null, $identifier=null, $file=null) {
         $identifier_ref = $identifier."_R";
 
         $xpath = new \DOMXpath($this);

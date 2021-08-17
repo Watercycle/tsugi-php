@@ -10,7 +10,13 @@ if ( ! isset($CFG) ) die_with_error_log("Please configure this product using con
 $CFG->dbversion = 201710072300;
 
 // Just turn this off to avoid security holes due to XML parsing
-if ( function_exists ( 'libxml_disable_entity_loader' ) ) libxml_disable_entity_loader();
+if ( function_exists ( 'libxml_disable_entity_loader' ) ) {
+    // In PHP 8.0 and later, PHP uses libxml versions from 2.9.0, which disabled XXE by default.
+    // https://php.watch/versions/8.0/libxml_disable_entity_loader-deprecation
+    if (\PHP_VERSION_ID < 80000) {
+        libxml_disable_entity_loader();
+    }
+}
 
 // Only exists in PHP 5 >= 5.5.0
 if ( ! function_exists ( 'json_last_error_msg' ) ) {
